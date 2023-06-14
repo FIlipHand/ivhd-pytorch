@@ -19,7 +19,7 @@ if __name__ == '__main__':
     X = X.reshape(N, -1) / 255.
     print(X.shape, torch.max(X))
     Y = dataset.targets[:N]
-    ivhd = IVHD(2, 10, 2, optimizer=torch.optim.Adam, epochs=200)
+    ivhd = IVHD(2, 10, 2, optimizer=torch.optim.Adagrad, epochs=10000)
 
     rn = torch.randint(0, N, (N, RN))
 
@@ -50,11 +50,11 @@ if __name__ == '__main__':
         x = ivhd.fit_transform(X, nn, rn)
 
     fig = plt.figure()
-    print(Y.shape)
+    #print(Y.shape)
     plt.title("Mnist 2d visualization")
     for i in range(10):
         points = x[Y == i]
-        plt.scatter(points[:, 0], points[:, 1], label=f"{i}", alpha=0.1)
-    print(x)
+        plt.scatter(points[:, 0], points[:, 1], label=f"{i}", marker="x", alpha=0.5)
+    #print(x)
     plt.legend()
     plt.show()

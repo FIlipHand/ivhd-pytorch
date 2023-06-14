@@ -29,18 +29,23 @@ class IVHD:
             return self.force_method(X, NN, RN)
         else:
             x = torch.rand((X.shape[0], 1, self.n_components), requires_grad=True)
+            x_start = x.detach().clone()
             NN = NN.reshape(-1)
             RN = RN.reshape(-1)
-            optimizer = self.optimizer(params={x}, lr=0.5)
+            optimizer = self.optimizer(params={x}, lr=10.)
             for i in range(self.epochs):
+                x_copy = x.detach().clone()
                 optimizer.zero_grad()
-                nn_diffs = x - torch.index_select(x, 0, NN).reshape(X.shape[0], -1, self.n_components)
-                rn_diffs = x - torch.index_select(x, 0, RN).reshape(X.shape[0], -1, self.n_components)
+                nn_diffs = x - torch.index_select(x_copy, 0, NN).reshape(X.shape[0], -1, self.n_components)
+                rn_diffs = x - torch.index_select(x_copy, 0, RN).reshape(X.shape[0], -1, self.n_components)
                 nn_dist = torch.sqrt(torch.sum((nn_diffs+1e-5) ** 2, dim=-1, keepdim=True))
                 rn_dist = torch.sqrt(torch.sum((rn_diffs+1e-5) ** 2, dim=-1, keepdim=True))
 
-                loss = torch.sum(nn_dist*nn_dist) + self.c*torch.sum((1-rn_dist)*(1-rn_dist))
-                print(f"\r{i} loss: {loss.item()}, X: {x[0]}", end="\n")
+                loss = torch.mean(nn_dist*nn_dist) + self.c*torch.mean((1-rn_dist)*(1-rn_dist))
+                print(f"\r{i} loss: {loss.item()}, X: {x[0]}", torch.mean(torch.abs(x-x_start)),
+                      torch.max(torch.abs(x-x_start)), end="")
+                if i % 100 == 0:
+                    print()
                 loss.backward()
                 optimizer.step()
             return x[:, 0].detach()

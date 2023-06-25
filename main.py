@@ -9,8 +9,8 @@ import numpy as np
 from knn_graph.faiss_generator import FaissGenerator
 from knn_graph.graph import Graph
 N = 60000
-NN = 5
-RN = 2
+NN = 2
+RN = 1
 
 if __name__ == '__main__':
     dataset = torchvision.datasets.MNIST("mnist", train=True, download=True)
@@ -19,7 +19,7 @@ if __name__ == '__main__':
     X = X.reshape(N, -1) / 255.
     print(X.shape, torch.max(X))
     Y = dataset.targets[:N]
-    ivhd = IVHD(2, NN, RN, c=0.05, eta=1., optimizer=None, optimizer_kwargs={"lr": 0.1}, epochs=2_000, device="cuda")
+    ivhd = IVHD(2, NN, RN, c=0.05, eta=0.02, optimizer=None, optimizer_kwargs={"lr": 0.1}, epochs=3_000, device="cuda")
 
     rn = torch.randint(0, N, (N, RN))
 

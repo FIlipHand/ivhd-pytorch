@@ -13,11 +13,11 @@ def test_sanity_ivhd(device, optimizer):
     NN = torch.tensor([[1, 2], [0, 2], [0, 1], [4, 5], [3, 5], [3, 4]])
     RN = torch.tensor([[3], [4], [3], [0], [1], [2]])
     X = torch.zeros((6, 3))
-    ivhd = IVHD(2, 2, 1, 0.3, optimizer=optimizer, optimizer_kwargs={"lr": 0.1}, epochs=300, eta=1., device=device,
+    ivhd = IVHD(2, 2, 1, 0.3, optimizer=optimizer, optimizer_kwargs={"lr": 0.1}, epochs=1000, eta=0.1, device=device,
                 verbose=True)
 
     x_2d = ivhd.fit_transform(X=X, NN=NN, RN=RN)
-
+    print(x_2d)
     assert x_2d.shape == (6, 2)
     assert str(x_2d.device) == device
 
@@ -47,8 +47,9 @@ def test_mnist_part_ivhd(device, optimizer, N, NN, RN):
     _, nn = torch.topk(distances, NN+1, dim=-1, largest=False)
     NN_tensor = nn[:, 1:]
     RN_tensor = torch.randint(0, N, (N, RN))
+    epochs = 600 if optimizer is not None else 2000
 
-    ivhd = IVHD(2, NN, RN, 0.4, optimizer=optimizer, optimizer_kwargs={"lr": 0.1}, epochs=600, eta=1., device=device,
+    ivhd = IVHD(2, NN, RN, 0.4, optimizer=optimizer, optimizer_kwargs={"lr": 0.1}, epochs=epochs, eta=0.002, device=device,
                 verbose=True)
 
     x_2d = ivhd.fit_transform(X=X, NN=NN_tensor, RN=RN_tensor)

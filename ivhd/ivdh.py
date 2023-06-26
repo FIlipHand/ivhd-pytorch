@@ -18,6 +18,7 @@ class IVHD:
             device: str = "cpu",
             autoadapt=False,
             velocity_limit=False,
+            finalizing_epochs = 0,
             verbose=True) -> None:
         self.n_components = n_components
         self.nn = nn
@@ -39,23 +40,19 @@ class IVHD:
         self.velocity_limit = velocity_limit
         self.max_velocity = 1.0
         self.vel_dump = 0.95
-
+        self.finalizing_epochs = finalizing_epochs
         self.x = None
         self.delta_x = None
 
-    def fit_transform(self, X: torch.Tensor, NN: torch.Tensor, RN: torch.Tensor, D_RN: torch.Tensor = None,
-                      finalizing=False) -> torch.Tensor:
+    def fit_transform(self, X: torch.Tensor, NN: torch.Tensor, RN: torch.Tensor) -> torch.Tensor:
         X = X.to(self.device)
         NN = NN.to(self.device)
         RN = RN.to(self.device)
         NN = NN.reshape(-1)
         RN = RN.reshape(-1)
-        if D_RN is not None:
-            D_RN = D_RN.to(self.device)
-            D_RN = D_RN.reshape(-1)
 
         if self.optimizer is None:
-            return self.force_directed_method(X, NN, RN, D_RN, finalizing)
+            return self.force_directed_method(X, NN, RN)
         else:
             return self.optimizer_method(X.shape[0], NN, RN)
 
@@ -86,7 +83,7 @@ class IVHD:
         optimizer.step()
         return loss
 
-    def force_directed_method(self, X: torch.Tensor, NN: torch.Tensor, RN: torch.Tensor, D_RN:torch.Tensor, finalizing) -> torch.Tensor:
+    def force_directed_method(self, X: torch.Tensor, NN: torch.Tensor, RN: torch.Tensor) -> torch.Tensor:
         NN_new = NN.reshape(X.shape[0], self.nn, 1)
         NN_new = [NN_new for _ in range(self.n_components)]
         NN_new = torch.cat(NN_new, dim=-1).to(torch.long)
@@ -94,23 +91,37 @@ class IVHD:
         RN_new = RN.reshape(X.shape[0], self.rn, 1)
         RN_new = [RN_new for _ in range(self.n_components)]
         RN_new = torch.cat(RN_new, dim=-1).to(torch.long)
+        D_RN = torch.zeros(X.shape[0], self.rn)
+        for i in range(self.rn):
+            D_RN[i] = torch.sum((X[i] - X[RN[i]])**2, dim=-1)
+        D_RN = D_RN.to(self.device)
+        D_RN = D_RN.reshape(-1)
+        
         if self.x is None:
             self.x = torch.rand((X.shape[0], 1, self.n_components), device=self.device)
         if self.delta_x is None:
             self.delta_x = torch.zeros_like(self.x)
         for i in range(self.epochs):
-            loss = self.__force_directed_step(NN, RN, D_RN, finalizing, NN_new, RN_new)
+            loss = self.__force_directed_step(NN, RN, D_RN, NN_new, RN_new, finalizing=False)
             if self.verbose and i % 100 == 0:
                 print(f"\r{i} loss: {loss.item()}")
+
+        if self.finalizing_epochs > 0:
+            self.max_velocity = 1000.0
+            for i in range(self.finalizing_epochs):
+                loss = self.__force_directed_step(NN, RN, D_RN, NN_new, RN_new, finalizing=True)
+                if self.verbose and i % 100 == 0:
+                    print(f"\r{i} loss: {loss.item()}")
+
         return self.x[:, 0]
 
-    def __force_directed_step(self, NN, RN, D_RN, finalizing, NN_new, RN_new):
+    def __force_directed_step(self, NN, RN, D_RN, NN_new, RN_new, finalizing):
         nn_diffs = self.x - torch.index_select(self.x, 0, NN).view(self.x.shape[0], -1, self.n_components)
         rn_diffs = self.x - torch.index_select(self.x, 0, RN).view(self.x.shape[0], -1, self.n_components)
         nn_dist = torch.sqrt(torch.sum((nn_diffs+1e-8)*(nn_diffs+1e-8), dim=-1, keepdim=True))
         rn_dist = torch.sqrt(torch.sum((rn_diffs+1e-8)*(rn_diffs+1e-8), dim=-1, keepdim=True))
 
-        f_nn, f_rn = self.__compute_forces(NN, RN, D_RN, finalizing, nn_dist, rn_dist, nn_diffs, rn_diffs, NN_new, RN_new)
+        f_nn, f_rn = self.__compute_forces(NN, RN, D_RN, nn_dist, rn_dist, nn_diffs, rn_diffs, NN_new, RN_new, finalizing)
 
         f = -f_nn - self.c*f_rn
         self.delta_x = self.a*self.delta_x + self.b*f
@@ -146,7 +157,7 @@ class IVHD:
         if self.eta < 0.01:
             self.eta = 0.01
 
-    def __compute_energy(self, NN, RN, D_RN, finalizing, nn_dist, rn_dist):
+    def __compute_energy(self, NN, RN, D_RN, nn_dist, rn_dist, finalizing):
         if finalizing:
             nn_energy = 0.005 / nn_dist
             rn_energy = 0.005 / rn_dist
@@ -157,8 +168,8 @@ class IVHD:
             rn_energy = (2.0 / rn_dist) * (rn_dist - torch.index_select(D_RN, 0, RN).reshape(self.x.shape[0], -1, 1))
         return nn_energy, rn_energy
     
-    def __compute_forces(self, NN, RN, D_RN, finalizing, nn_dist, rn_dist, nn_diffs, rn_diffs, NN_new, RN_new):
-        nn_energy, rn_energy = self.__compute_energy(NN, RN, D_RN, finalizing, nn_dist, rn_dist)
+    def __compute_forces(self, NN, RN, D_RN,  nn_dist, rn_dist, nn_diffs, rn_diffs, NN_new, RN_new, finalizing):
+        nn_energy, rn_energy = self.__compute_energy(NN, RN, D_RN, nn_dist, rn_dist, finalizing)
 
         f_nn = nn_energy * nn_diffs
         f_rn = rn_energy * (rn_dist-1)/(rn_dist + 1e-8) * rn_diffs

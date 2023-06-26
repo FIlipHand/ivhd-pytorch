@@ -21,7 +21,7 @@ if __name__ == '__main__':
     X = X.reshape(N, -1) / 255.
     Y = dataset.targets[:N]
     ivhd = IVHD(2, NN, RN, c=0.05, eta=0.02, optimizer=None, optimizer_kwargs={"lr": 0.1},
-                epochs=3_000, device="cuda", velocity_limit=False, autoadapt=False)
+                epochs=3_000, device="cuda", velocity_limit=False, autoadapt=False, finalizing_epochs=50)
 
     rn = torch.randint(0, N, (N, RN))
 
@@ -35,27 +35,17 @@ if __name__ == '__main__':
     graph = Graph()
     graph.load_from_binary_file("./graph_files/out.bin", nn_count=NN)
     nn = torch.tensor(graph.indexes.astype(np.int32))
-    d = torch.zeros(N, RN)
-    for i in range(RN):
-        d[i] = torch.sum((X[i] - X[rn[i]])**2, dim=-1)
+
 
     fig = plt.figure(figsize=(16, 8))
     plt.title("Mnist 2d visualization")
-    axes = fig.subplots(nrows=1, ncols=2)
 
-    x = ivhd.fit_transform(X, nn, rn, d).cpu()
-
-    for i in range(10):
-        points = x[Y == i]
-        axes[0].scatter(points[:, 0], points[:, 1], label=f"{i}", marker=".", s=1, alpha=0.5)
-    #print(x)
-    axes[0].legend()
-    ivhd.epochs = 50
-    x = ivhd.fit_transform(X, nn, rn, d, finalizing=True).cpu()
+    x = ivhd.fit_transform(X, nn, rn).cpu()
 
     for i in range(10):
         points = x[Y == i]
-        axes[1].scatter(points[:, 0], points[:, 1], label=f"{i}", marker=".", s=1, alpha=0.5)
+        plt.scatter(points[:, 0], points[:, 1], label=f"{i}", marker=".", s=1, alpha=0.5)
     #print(x)
-    axes[1].legend()
+    plt.legend()
     plt.show()
+    

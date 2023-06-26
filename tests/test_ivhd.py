@@ -15,11 +15,8 @@ def test_sanity_ivhd(device, optimizer):
     X = torch.zeros((6, 3))
     ivhd = IVHD(2, 2, 1, 0.3, optimizer=optimizer, optimizer_kwargs={"lr": 0.1}, epochs=300, eta=0.1, device=device,
                 verbose=True)
-    D_RN = torch.zeros(6, 1)
-    for i in range(1):
-        D_RN[i] = torch.sum((X[i] - X[RN[i]])**2, dim=-1)
 
-    x_2d = ivhd.fit_transform(X=X, NN=NN, RN=RN, D_RN=D_RN)
+    x_2d = ivhd.fit_transform(X=X, NN=NN, RN=RN)
     print(x_2d)
     assert x_2d.shape == (6, 2)
     assert str(x_2d.device) == device
@@ -50,14 +47,11 @@ def test_mnist_part_ivhd(device, optimizer, N, NN, RN):
     _, nn = torch.topk(distances, NN+1, dim=-1, largest=False)
     NN_tensor = nn[:, 1:]
     RN_tensor = torch.randint(0, N, (N, RN))
-    D_RN_tensor = torch.zeros(N, RN)
-    for i in range(RN):
-        D_RN_tensor[i] = torch.sum((X[i] - X[RN_tensor[i]])**2, dim=-1)
 
     ivhd = IVHD(2, NN, RN, 0.4, optimizer=optimizer, optimizer_kwargs={"lr": 0.1}, epochs=600, eta=0.2, device=device, velocity_limit=True,
                 verbose=True)
 
-    x_2d = ivhd.fit_transform(X=X, NN=NN_tensor, RN=RN_tensor, D_RN=D_RN_tensor)
+    x_2d = ivhd.fit_transform(X=X, NN=NN_tensor, RN=RN_tensor)
 
     assert x_2d.shape == (N, 2)
     assert str(x_2d.device) == device

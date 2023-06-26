@@ -43,8 +43,8 @@ class IVHD:
         self.x = None
         self.delta_x = None
 
-
-    def fit_transform(self, X: torch.Tensor, NN: torch.Tensor, RN: torch.Tensor,  D_RN:torch.Tensor=None, finalizing=False) -> torch.Tensor:
+    def fit_transform(self, X: torch.Tensor, NN: torch.Tensor, RN: torch.Tensor, D_RN: torch.Tensor = None,
+                      finalizing=False) -> torch.Tensor:
         X = X.to(self.device)
         NN = NN.to(self.device)
         RN = RN.to(self.device)
@@ -102,16 +102,13 @@ class IVHD:
             loss = self.__force_directed_step(NN, RN, D_RN, finalizing, NN_new, RN_new)
             if self.verbose and i % 100 == 0:
                 print(f"\r{i} loss: {loss.item()}")
-
-            
         return self.x[:, 0]
 
-
     def __force_directed_step(self, NN, RN, D_RN, finalizing, NN_new, RN_new):
-        nn_diffs = self.x - torch.index_select(self.x, 0, NN).reshape(self.x.shape[0], -1, self.n_components)
-        rn_diffs = self.x - torch.index_select(self.x, 0, RN).reshape(self.x.shape[0], -1, self.n_components)
-        nn_dist = torch.sqrt(torch.sum((nn_diffs+1e-8) ** 2, dim=-1, keepdim=True))
-        rn_dist = torch.sqrt(torch.sum((rn_diffs+1e-8) ** 2, dim=-1, keepdim=True))
+        nn_diffs = self.x - torch.index_select(self.x, 0, NN).view(self.x.shape[0], -1, self.n_components)
+        rn_diffs = self.x - torch.index_select(self.x, 0, RN).view(self.x.shape[0], -1, self.n_components)
+        nn_dist = torch.sqrt(torch.sum((nn_diffs+1e-8)*(nn_diffs+1e-8), dim=-1, keepdim=True))
+        rn_dist = torch.sqrt(torch.sum((rn_diffs+1e-8)*(rn_diffs+1e-8), dim=-1, keepdim=True))
 
         f_nn, f_rn = self.__compute_forces(NN, RN, D_RN, finalizing, nn_dist, rn_dist, nn_diffs, rn_diffs, NN_new, RN_new)
 
@@ -119,13 +116,14 @@ class IVHD:
         self.delta_x = self.a*self.delta_x + self.b*f
         
         if self.velocity_limit or self.autoadapt:
-            squared_velocity = torch.sum(self.delta_x**2, dim=-1)
+            squared_velocity = torch.sum(self.delta_x*self.delta_x, dim=-1)
             sqrt_velocity = torch.sqrt(squared_velocity)
 
         if self.velocity_limit:
-            self.delta_x[squared_velocity > self.max_velocity**2] *=  self.max_velocity / sqrt_velocity[squared_velocity > self.max_velocity**2].reshape(-1, 1)
+            self.delta_x[squared_velocity > self.max_velocity**2] *= \
+                self.max_velocity / sqrt_velocity[squared_velocity > self.max_velocity**2].reshape(-1, 1)
 
-        self.x = self.x + self.eta * self.delta_x
+        self.x += self.eta * self.delta_x
 
         if self.autoadapt:   
             self.__autoadapt(sqrt_velocity)
@@ -139,7 +137,7 @@ class IVHD:
     def __autoadapt(self, sqrt_velocity):
         v_avg = self.delta_x.mean()
         self.curr_max_velo[self.curr_max_velo_idx] = sqrt_velocity.max()
-        self.curr_max_velo_idx = (self.curr_max_velo_idx + 1)% self.buffer_len
+        self.curr_max_velo_idx = (self.curr_max_velo_idx + 1) % self.buffer_len
         v_max = self.curr_max_velo.mean()
         if v_max > 10 * v_avg:
             self.eta /= 1.01
@@ -148,7 +146,7 @@ class IVHD:
         if self.eta < 0.01:
             self.eta = 0.01
 
-    def __compute_energy(self,NN, RN, D_RN, finalizing, nn_dist, rn_dist):
+    def __compute_energy(self, NN, RN, D_RN, finalizing, nn_dist, rn_dist):
         if finalizing:
             nn_energy = 0.005 / nn_dist
             rn_energy = 0.005 / rn_dist

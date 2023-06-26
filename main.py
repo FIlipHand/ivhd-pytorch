@@ -20,7 +20,8 @@ if __name__ == '__main__':
     X = dataset.data[:N]
     X = X.reshape(N, -1) / 255.
     Y = dataset.targets[:N]
-    ivhd = IVHD(2, NN, RN, c=0.05, eta=0.02, optimizer=None, optimizer_kwargs={"lr": 0.1}, epochs=3_000, device="cuda", velocity_limit=True)
+    ivhd = IVHD(2, NN, RN, c=0.05, eta=0.02, optimizer=None, optimizer_kwargs={"lr": 0.1},
+                epochs=3_000, device="cuda", velocity_limit=False, autoadapt=False)
 
     rn = torch.randint(0, N, (N, RN))
 
@@ -42,17 +43,15 @@ if __name__ == '__main__':
     plt.title("Mnist 2d visualization")
     axes = fig.subplots(nrows=1, ncols=2)
 
-    with autograd.detect_anomaly():
-        x = ivhd.fit_transform(X, nn, rn, d).cpu()
+    x = ivhd.fit_transform(X, nn, rn, d).cpu()
 
     for i in range(10):
         points = x[Y == i]
         axes[0].scatter(points[:, 0], points[:, 1], label=f"{i}", marker=".", s=1, alpha=0.5)
     #print(x)
     axes[0].legend()
-    with autograd.detect_anomaly():
-        ivhd.epochs = 50
-        x = ivhd.fit_transform(X, nn, rn, d, finalizing=True).cpu()
+    ivhd.epochs = 50
+    x = ivhd.fit_transform(X, nn, rn, d, finalizing=True).cpu()
 
     for i in range(10):
         points = x[Y == i]

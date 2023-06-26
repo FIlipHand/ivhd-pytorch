@@ -41,12 +41,13 @@ def make_measurement(nn, rn, epochs, optimizer, optimizer_name, device):
                 epochs=epochs,
                 optimizer=optimizer,
                 optimizer_kwargs={"lr": 0.2},
-                device=device, verbose=False)
+                device=device, verbose=False,
+                velocity_limit=False, autoadapt=False)
     x = None
-    start = time()
     NN, RN = create_neighbours(nn, rn)
+    start = time()
     for _ in range(N):
-        x = ivhd.fit_transform(X, NN, RN)
+        x = ivhd.fit_transform(X, NN, RN, torch.zeros_like(RN))
     end = time()
     average_time = (end - start) / N
     print("#"*60)

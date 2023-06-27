@@ -48,7 +48,7 @@ def test_mnist_part_ivhd(device, optimizer, N, NN, RN):
     NN_tensor = nn[:, 1:]
     RN_tensor = torch.randint(0, N, (N, RN))
 
-    ivhd = IVHD(2, NN, RN, 0.4, optimizer=optimizer, optimizer_kwargs={"lr": 0.1}, epochs=600, eta=0.2, device=device,
+    ivhd = IVHD(2, NN, RN, 0.4, optimizer=optimizer, optimizer_kwargs={"lr": 0.1}, epochs=600, eta=0.2, device=device, velocity_limit=True,
                 verbose=True)
 
     x_2d = ivhd.fit_transform(X=X, NN=NN_tensor, RN=RN_tensor)

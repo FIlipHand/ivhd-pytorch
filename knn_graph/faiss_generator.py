@@ -15,7 +15,12 @@ class FaissGenerator:
         self.distances = []
         self.nn = None
         self.cosine_metric = cosine_metric
-
+        if (num_gpus := faiss.get_num_gpus()) >= 1:
+            print(f"Faiss found {num_gpus} GPU(s). We only need one :D")
+            # For emnist gpu is 10x faster (4s compared to 40s)
+            self.__gpu_res = faiss.StandardGpuResources()
+        else:
+            self.__gpu_res = None
         self.N = len(df.axes[0])
         self.M = len(df.axes[1]) - 1
 
@@ -41,7 +46,8 @@ class FaissGenerator:
             quantizer = faiss.IndexFlatL2(self.M)
             index_flat = faiss.IndexIVFFlat(quantizer, self.M, int(sqrt(self.N)))
 
-        # gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index_flat)
+        if self.__gpu_res:
+            index_flat = faiss.index_cpu_to_gpu(self.__gpu_res, 0, index_flat)
         assert not index_flat.is_trained
         index_flat.train(self.X)
         assert index_flat.is_trained

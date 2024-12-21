@@ -1,7 +1,11 @@
+from knn_graph.graph import Graph
+from knn_graph.faiss_generator import FaissGenerator
 from typing import Optional, Type, Dict, Any
-
+import pandas as pd
+import os
 import torch
 from torch.optim import Optimizer
+import numpy as np
 
 
 class IVHD:
@@ -16,6 +20,7 @@ class IVHD:
             epochs: int = 200,
             eta: float = 0.1,
             device: str = "cpu",
+            graph_file: str = '',
             autoadapt=False,
             velocity_limit=False,
             verbose=True) -> None:
@@ -31,21 +36,33 @@ class IVHD:
         self.b = 0.3
         self.device = device
         self.verbose = verbose
+        self.graph_file = graph_file
 
         self.autoadapt = autoadapt
         self.buffer_len = 10
         self.curr_max_velo = torch.tensor(([0.0]*self.buffer_len))
-        self.curr_max_velo_idx = 1 
+        self.curr_max_velo_idx = 1
         self.velocity_limit = velocity_limit
         self.max_velocity = 1.0
         self.vel_dump = 0.95
         self.x = None
         self.delta_x = None
 
-    def fit_transform(self, X: torch.Tensor, NN: torch.Tensor, RN: torch.Tensor) -> torch.Tensor:
+    def fit_transform(self, X: torch.Tensor) -> np.ndarray:
+        if self.graph_file:
+            faiss_generator = FaissGenerator(pd.DataFrame(X.numpy()), cosine_metric=False)
+            faiss_generator.run(nn=self.nn)
+            faiss_generator.save_to_binary_file(self.graph_file)
+        graph = Graph()
+        graph.load_from_binary_file(self.graph_file, nn_count=self.nn)
+        nn = torch.tensor(graph.indexes.astype(np.int32))
+
+
         X = X.to(self.device)
-        NN = NN.to(self.device)
-        RN = RN.to(self.device)
+        NN = nn.to(self.device)
+        # RN = RN.to(self.device)
+        n = X.shape[0]
+        RN = torch.randint(0, n, (n, self.rn)).to(self.device)
         NN = NN.reshape(-1)
         RN = RN.reshape(-1)
 
@@ -67,9 +84,9 @@ class IVHD:
                 if i % 100 == 0:
                     print()
 
-        return self.x[:, 0].detach()
+        return self.x[:, 0].detach().cpu().numpy()
 
-    def __optimizer_step(self, optimizer, NN, RN) -> torch.tensor:
+    def __optimizer_step(self, optimizer, NN, RN) -> np.ndarray:
         optimizer.zero_grad()
         nn_diffs = self.x - torch.index_select(self.x, 0, NN).view(self.x.shape[0], -1, self.n_components)
         rn_diffs = self.x - torch.index_select(self.x, 0, RN).view(self.x.shape[0], -1, self.n_components)
@@ -81,7 +98,7 @@ class IVHD:
         optimizer.step()
         return loss
 
-    def force_directed_method(self, X: torch.Tensor, NN: torch.Tensor, RN: torch.Tensor) -> torch.Tensor:
+    def force_directed_method(self, X: torch.Tensor, NN: torch.Tensor, RN: torch.Tensor) -> np.ndarray:
         NN_new = NN.reshape(X.shape[0], self.nn, 1)
         NN_new = [NN_new for _ in range(self.n_components)]
         NN_new = torch.cat(NN_new, dim=-1).to(torch.long)
@@ -94,13 +111,13 @@ class IVHD:
             self.x = torch.rand((X.shape[0], 1, self.n_components), device=self.device)
         if self.delta_x is None:
             self.delta_x = torch.zeros_like(self.x)
-        
+
         for i in range(self.epochs):
             loss = self.__force_directed_step(NN, RN, NN_new, RN_new)
             if self.verbose and i % 100 == 0:
                 print(f"\r{i} loss: {loss.item()}")
 
-        return self.x[:, 0]
+        return self.x[:, 0].cpu().numpy()
 
     def __force_directed_step(self, NN, RN, NN_new, RN_new):
         nn_diffs = self.x - torch.index_select(self.x, 0, NN).view(self.x.shape[0], -1, self.n_components)
@@ -112,7 +129,7 @@ class IVHD:
 
         f = -f_nn - self.c*f_rn
         self.delta_x = self.a*self.delta_x + self.b*f
-        
+
         if self.velocity_limit or self.autoadapt:
             squared_velocity = torch.sum(self.delta_x*self.delta_x, dim=-1)
             sqrt_velocity = torch.sqrt(squared_velocity)
@@ -123,7 +140,7 @@ class IVHD:
 
         self.x += self.eta * self.delta_x
 
-        if self.autoadapt:   
+        if self.autoadapt:
             self.__autoadapt(sqrt_velocity)
 
         if self.velocity_limit:

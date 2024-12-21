@@ -2,3 +2,7 @@ venv
 **/__pycache__
 mnist
 emnist
+graph_files/emnist*
+graph_files/mnist*
+graph_files/amazon*
+graph_files/rcv*

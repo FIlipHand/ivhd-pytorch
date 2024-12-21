@@ -2,12 +2,12 @@ import struct
 
 import numpy as np
 import pandas as pd
-
+from typing import Optional
 
 class Graph:
     def __init__(self):
-        self.indexes = None
-        self.distances = None
+        self.indexes : Optional[np.ndarray] = None
+        self.distances : Optional[np.ndarray] = None
 
     def get_neighbors(self, n: int) -> np.ndarray:
         return self.indexes[n]

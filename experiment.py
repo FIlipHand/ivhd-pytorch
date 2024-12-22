@@ -5,7 +5,7 @@ from models.tsne import MY_TSNE
 from umap import UMAP
 from pacmap import PaCMAP
 from torchvision.datasets import MNIST, EMNIST
-from sklearn.datasets import fetch_rcv1
+from knn_graph.faiss_generator import FaissGenerator
 import matplotlib.pyplot as plt
 import argparse
 import glob
@@ -13,16 +13,21 @@ from pathlib import Path
 import re
 from datetime import datetime
 import torch
+import pandas as pd
 
-device = (
-    torch.device("cuda") if torch.cuda.is_available() else
-    torch.device("mps") if torch.backends.mps.is_available() else
-    torch.device("cpu")
-)
 
 def run(dataset=Literal['mnist', 'emnist', 'rcv', 'amazon'],
         model=Literal["ivhd", "umap", "pacmap", "tsne"],
-        interactive=False):
+        interactive=False,
+        device='auto',
+        graph_file=''):
+    
+    if device == 'auto':
+        device = (
+            torch.device("cuda") if torch.cuda.is_available() else
+            torch.device("mps") if torch.backends.mps.is_available() else
+            torch.device("cpu")
+        )
 
     match dataset:
         case 'mnist':
@@ -38,13 +43,7 @@ def run(dataset=Literal['mnist', 'emnist', 'rcv', 'amazon'],
             X = X.reshape(N, -1) / 255.
             Y = data.targets[:N]
         case 'rcv':
-            data = fetch_rcv1(data_home='rcv')
-            X = data.data
-            N = X.shape[0]
-            X = X.reshape(N, -1) / 255.
-            Y = data.target[:N]
-            print(X.iloc[:3, :20])
-            exit()
+            raise NotImplementedError('Not yet implemented!')
         case 'amazon':
             raise NotImplementedError('Not yet implemented!')
         case _:
@@ -53,21 +52,30 @@ def run(dataset=Literal['mnist', 'emnist', 'rcv', 'amazon'],
 
     match model:
         case 'ivhd':
-            def choose_graph_file():
-                directory = str(Path('./graph_files/').absolute())
-                results = glob.glob(f'{directory}/{dataset}*')
+            final_file = None
+            nn_param = 2
+            rm_param = 1
+            if not graph_file:
+                # we will search for possible files
+                directory = Path('./graph_files/').absolute()
+                results = glob.glob(f'{Path(directory)}/{dataset}*')
                 output_list = [
                     int(match.group(1)) for string in results
                     if (match := re.search(r'_(\d+)nn\.bin$', string))
                 ]
-                if output_list:
-                    return results[max(range(len(output_list)), key=output_list.__getitem__)]
+                if output_list and max(output_list)>= nn_param:
+                    final_file = results[max(range(len(output_list)), key=output_list.__getitem__)]
                 else:
-                    return None
-
-            model = IVHD(2, c=0.05, eta=0.02, optimizer=None, optimizer_kwargs={"lr": 0.1},
+                    final_file = str(Path(directory, f'{dataset}_{nn_param}nn.bin'))
+            else:
+                final_file = graph_file
+            if not Path(final_file).is_file():
+                faiss_generator = FaissGenerator(pd.DataFrame(X.numpy()), cosine_metric=False)
+                faiss_generator.run(nn=nn_param)
+                faiss_generator.save_to_binary_file(final_file)
+            model = IVHD(2, nn=nn_param, rn=rm_param, c=0.05, eta=0.02, optimizer=None, optimizer_kwargs={"lr": 0.1},
                         epochs=3_000, device=device, velocity_limit=False, autoadapt=False,
-                        graph_file=choose_graph_file())
+                        graph_file=final_file)
         case 'pacmap':
             model = PaCMAP(verbose=True)
         case 'tsne':
@@ -116,6 +124,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        '--graph',
+        type=str,
+        dest='graph'
+    )
+
+    parser.add_argument(
         '--interactive',
         action='store_false',
         dest='interactive',
@@ -124,4 +138,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    run(dataset=args.dataset, model=args.model, interactive=args.interactive)
+    run(dataset=args.dataset, model=args.model, interactive=args.interactive, graph_file=args.graph)

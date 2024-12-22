@@ -5,6 +5,7 @@ import pandas as pd
 import torch
 from torch.optim import Optimizer
 import numpy as np
+import os
 
 
 class IVHD:
@@ -48,16 +49,9 @@ class IVHD:
         self.delta_x = None
 
     def fit_transform(self, X: torch.Tensor) -> np.ndarray:
-        if not self.graph_file:
-            faiss_generator = FaissGenerator(pd.DataFrame(X.numpy()), cosine_metric=False)
-            faiss_generator.run(nn=self.nn)
-            self.graph_file = f'./graph_files/musze_isc_naprawie_za_1h.bin'
-            faiss_generator.save_to_binary_file(self.graph_file)
         graph = Graph()
         graph.load_from_binary_file(self.graph_file, nn_count=self.nn)
         nn = torch.tensor(graph.indexes.astype(np.int32))
-
-
         X = X.to(self.device)
         NN = nn.to(self.device)
         # RN = RN.to(self.device)

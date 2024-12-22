@@ -2,7 +2,6 @@ from knn_graph.graph import Graph
 from knn_graph.faiss_generator import FaissGenerator
 from typing import Optional, Type, Dict, Any
 import pandas as pd
-import os
 import torch
 from torch.optim import Optimizer
 import numpy as np

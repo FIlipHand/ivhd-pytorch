@@ -12,7 +12,13 @@ import glob
 from pathlib import Path
 import re
 from datetime import datetime
+import torch
 
+device = (
+    torch.device("cuda") if torch.cuda.is_available() else
+    torch.device("mps") if torch.backends.mps.is_available() else
+    torch.device("cpu")
+)
 
 def run(dataset=Literal['mnist', 'emnist', 'rcv', 'amazon'],
         model=Literal["ivhd", "umap", "pacmap", "tsne"],
@@ -60,7 +66,7 @@ def run(dataset=Literal['mnist', 'emnist', 'rcv', 'amazon'],
                     return None
 
             model = IVHD(2, c=0.05, eta=0.02, optimizer=None, optimizer_kwargs={"lr": 0.1},
-                        epochs=3_000, device="mps", velocity_limit=False, autoadapt=False,
+                        epochs=3_000, device=device, velocity_limit=False, autoadapt=False,
                         graph_file=choose_graph_file())
         case 'pacmap':
             model = PaCMAP(verbose=True)

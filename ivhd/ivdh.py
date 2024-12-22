@@ -48,9 +48,10 @@ class IVHD:
         self.delta_x = None
 
     def fit_transform(self, X: torch.Tensor) -> np.ndarray:
-        if self.graph_file:
+        if not self.graph_file:
             faiss_generator = FaissGenerator(pd.DataFrame(X.numpy()), cosine_metric=False)
             faiss_generator.run(nn=self.nn)
+            self.graph_file = f'./graph_files/musze_isc_naprawie_za_1h.bin'
             faiss_generator.save_to_binary_file(self.graph_file)
         graph = Graph()
         graph.load_from_binary_file(self.graph_file, nn_count=self.nn)

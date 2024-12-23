@@ -1,19 +1,26 @@
-from typing import Literal
-
-from ivhd.ivdh import IVHD
-from models.tsne import MY_TSNE
-from umap import UMAP
-from pacmap import PaCMAP
-from torchvision.datasets import MNIST, EMNIST
-from knn_graph.faiss_generator import FaissGenerator
-import matplotlib.pyplot as plt
 import argparse
 import glob
-from pathlib import Path
 import re
 from datetime import datetime
-import torch
+from pathlib import Path
+from typing import Literal
+
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+import torch
+from pacmap import PaCMAP
+from sklearn.datasets import fetch_20newsgroups
+from sklearn.decomposition import PCA
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import MinMaxScaler
+from torch import optim
+from torchvision.datasets import EMNIST, MNIST
+from umap import UMAP
+
+from ivhd.ivdh import IVHD
+from knn_graph.faiss_generator import FaissGenerator
+from models.tsne import MY_TSNE
 
 
 def run(dataset=Literal['mnist', 'emnist', 'rcv', 'amazon'],
@@ -42,10 +49,26 @@ def run(dataset=Literal['mnist', 'emnist', 'rcv', 'amazon'],
             N = X.shape[0]
             X = X.reshape(N, -1) / 255.
             Y = data.targets[:N]
-        case 'rcv':
-            raise NotImplementedError('Not yet implemented!')
-        case 'amazon':
-            raise NotImplementedError('Not yet implemented!')
+        case '20ng':
+            newsgroups = fetch_20newsgroups(data_home='20ng', subset='all', remove=('headers', 'footers', 'quotes'))
+            posts = newsgroups.data
+            Y = newsgroups.target
+            vectorizer = TfidfVectorizer(max_features=1000) 
+            tmp = vectorizer.fit_transform(posts).toarray()
+            scaler = MinMaxScaler()
+            tmp = scaler.fit_transform(tmp)
+            pca = PCA(n_components=50)
+            X = torch.Tensor(pca.fit_transform(tmp))
+        case 'higgs':
+            if not Path('./HIGGS.csv').is_file():
+                import subprocess
+                subprocess.run(['wget', 'https://archive.ics.uci.edu/static/public/280/higgs.zip'])
+                subprocess.run(['unzip', 'higgs.zip'])
+                subprocess.run(['gzip', '-d', 'HIGGS.csv.gz'])
+                pass
+            X = np.loadtxt("HIGGS.csv", delimiter=",")
+            Y = torch.Tensor(X[:, 0])
+            X = torch.Tensor(X[:, 1:])
         case _:
             raise ValueError('only mnist, emnist, rcv1 and amazon are supported')
 
@@ -86,9 +109,6 @@ def run(dataset=Literal['mnist', 'emnist', 'rcv', 'amazon'],
         case _:
             raise ValueError("Only support ivhd, pacmap, tsne, umap")
 
-    # if isinstance(model, TSNE): # eh eh eh
-    #     x = model.fit(X)
-    # else:
     x = model.fit_transform(X)
 
     fig = plt.figure(figsize=(16, 8))
@@ -110,9 +130,9 @@ if __name__ == "__main__":
     parser.add_argument(
         '--dataset',
         type=str,
-        choices=['mnist', 'emnist', 'rcv', 'amazon'],
+        choices=['mnist', 'emnist', '20ng', 'higgs'],
         required=True,
-        help="Specify the dataset to use. Choices are: 'mnist', 'emnist', 'rcv1', 'amazon'."
+        help="Specify the dataset to use. Choices are: 'mnist', 'emnist', '20ng', 'higgs'."
     )
 
     parser.add_argument(

@@ -3,8 +3,7 @@ venv
 mnist
 emnist
 rcv
-graph_files/emnist*
-graph_files/mnist*
-graph_files/amazon*
-graph_files/rcv*
+20ng
 *.png
+HIGGS.csv
+*nn.bin

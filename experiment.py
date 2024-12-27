@@ -90,29 +90,30 @@ def run(
             final_file = None
             nn_param = 2
             rm_param = 1
-            if not graph_file:
-                # we will search for possible files
-                directory = Path("./graph_files/").absolute()
-                results = glob.glob(f"{Path(directory)}/{dataset}*")
-                output_list = [
-                    int(match.group(1))
-                    for string in results
-                    if (match := re.search(r"_(\d+)nn\.bin$", string))
-                ]
-                if output_list and max(output_list) >= nn_param:
-                    final_file = results[
-                        max(range(len(output_list)), key=output_list.__getitem__)
-                    ]
-                else:
-                    final_file = str(Path(directory, f"{dataset}_{nn_param}nn.bin"))
-            else:
-                final_file = graph_file
-            if not Path(final_file).is_file():
-                faiss_generator = FaissGenerator(
-                    pd.DataFrame(X.numpy()), cosine_metric=False
-                )
-                faiss_generator.run(nn=nn_param)
-                faiss_generator.save_to_binary_file(final_file)
+            final_file = "./graph_files/graph.bin"
+            # if not graph_file:
+            #     # we will search for possible files
+            #     directory = Path("./graph_files/").absolute()
+            #     results = glob.glob(f"{Path(directory)}/{dataset}*")
+            #     output_list = [
+            #         int(match.group(1))
+            #         for string in results
+            #         if (match := re.search(r"_(\d+)nn\.bin$", string))
+            #     ]
+            #     if output_list and max(output_list) >= nn_param:
+            #         final_file = results[
+            #             max(range(len(output_list)), key=output_list.__getitem__)
+            #         ]
+            #     else:
+            #         final_file = str(Path(directory, f"{dataset}_{nn_param}nn.bin"))
+            # else:
+            #     final_file = graph_file
+            # if not Path(final_file).is_file():
+            #     faiss_generator = FaissGenerator(
+            #         pd.DataFrame(X.numpy()), cosine_metric=False
+            #     )
+            #     faiss_generator.run(nn=nn_param)
+            #     faiss_generator.save_to_binary_file(final_file)
             model = IVHD(
                 2,
                 nn=nn_param,

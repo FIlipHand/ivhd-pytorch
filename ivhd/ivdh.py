@@ -50,7 +50,7 @@ class IVHD:
 
     def fit_transform(self, X: torch.Tensor) -> np.ndarray:
         faiss_generator = FaissGenerator(
-            pd.DataFrame(X.numpy()), cosine_metric=False
+            pd.DataFrame(X.numpy()), cosine_metric=False, device=self.device
         )
         faiss_generator.run(nn=self.nn)
         faiss_generator.save_to_binary_file(self.graph_file)

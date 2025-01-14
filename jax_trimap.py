@@ -22,7 +22,8 @@ import datetime
 import time
 from typing import Mapping
 
-from absl import logging
+import logging
+import sys
 import jax
 import jax.numpy as jnp
 import jax.random as random
@@ -320,7 +321,7 @@ def generate_triplets(key,
   neighbors = np.concatenate((np.arange(n_points).reshape([-1, 1]), neighbors),
                              1)
   if verbose:
-    logging.info('found nearest neighbors')
+    print('found nearest neighbors')
   distance_fn = get_distance_fn(distance)
   # conpute scaled neighbors and the scale parameter
   knn_distances, neighbors, sig = find_scaled_neighbors(inputs, neighbors,
@@ -431,11 +432,11 @@ def transform(key,
   assert n_inliers < n_points - 1, (
       'n_inliers must be less than (number of data points - 1).')
   if verbose:
-    logging.info('running TriMap on %d points with dimension %d', n_points, dim)
+    print(f'running TriMap on {n_points} points with dimension {dim}')
   pca_solution = False
   if triplets is None:
     if verbose:
-      logging.info('pre-processing')
+      print('pre-processing')
     if distance != 'hamming':
       if dim > _DIM_PCA and apply_pca:
         inputs -= np.mean(inputs, axis=0)
@@ -443,7 +444,7 @@ def transform(key,
             n_components=_DIM_PCA, random_state=0).fit_transform(inputs)
         pca_solution = True
         if verbose:
-          logging.info('applied PCA')
+          print('applied PCA')
         else:
           inputs -= np.min(inputs)
           inputs /= np.max(inputs)
@@ -459,10 +460,10 @@ def transform(key,
         distance=distance,
         verbose=verbose)
     if verbose:
-      logging.info('sampled triplets')
+      print('sampled triplets')
   else:
     if verbose:
-      logging.info('using pre-computed triplets')
+      print('using pre-computed triplets')
 
   if isinstance(init_embedding, str):
     if init_embedding == 'pca':
@@ -482,7 +483,7 @@ def transform(key,
   n_triplets = float(triplets.shape[0])
   lr = lr * n_points / n_triplets
   if verbose:
-    logging.info('running TriMap using DBD')
+    print('running TriMap using DBD')
   vel = jnp.zeros_like(embedding, dtype=jnp.float32)
   gain = jnp.ones_like(embedding, dtype=jnp.float32)
 
@@ -498,10 +499,10 @@ def transform(key,
     if verbose:
       if (itr + 1) % _DISPLAY_ITER == 0:
         loss, n_violated = trimap_metrics(embedding, triplets, weights)
-        logging.info(
-            'Iteration: %4d / %4d, Loss: %3.3f, Violated triplets: %0.4f',
-            itr + 1, n_iters, loss, n_violated / n_triplets * 100.0)
+        print(
+          'Iteration: {:4d} / {:4d}, Loss: {:.3f}, Violated triplets: {:.4f}'.format(
+              itr + 1, n_iters, loss, n_violated / n_triplets * 100.0))
   if verbose:
     elapsed = str(datetime.timedelta(seconds=time.time() - t))
-    logging.info('Elapsed time: %s', elapsed)
+    print(f'Elapsed time: {elapsed}')
   return embedding

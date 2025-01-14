@@ -10,12 +10,12 @@ from numpy import sqrt
 
 
 class FaissGenerator:
-    def __init__(self, df: pd.DataFrame, cosine_metric: bool = False):
+    def __init__(self, df: pd.DataFrame, cosine_metric: bool = False, device='auto'):
         self.indexes = []
         self.distances = []
         self.nn = None
         self.cosine_metric = cosine_metric
-        if (num_gpus := faiss.get_num_gpus()) >= 1:
+        if device in ['cuda', 'auto'] and (num_gpus := faiss.get_num_gpus()) >= 1:
             print(f"Faiss found {num_gpus} GPU(s). We only need one :D")
             # For emnist gpu is 10x faster (4s compared to 40s)
             self.__gpu_res = faiss.StandardGpuResources()
@@ -57,15 +57,20 @@ class FaissGenerator:
         start = datetime.now()
         print("Searching...")
         index_flat.nprobe = 10
-        self.distances, self.indexes = index_flat.search(self.X, nn + 1)
+        tmp_distances, self.indexes = index_flat.search(self.X, nn + 1)
         print("Finished.")
 
         print(datetime.now() - start, file=sys.stderr)
 
         # normalize distances
-        norm = np.linalg.norm(self.X)
-        self.distances = np.divide(self.distances, norm)
+        # norm = np.linalg.norm(self.X)
+        # self.distances = np.divide(self.distances, norm)
+        max_indices = np.argmax(tmp_distances, axis=1)
+        self.distances = np.zeros_like(tmp_distances)
 
+        self.distances[np.arange(tmp_distances.shape[0]), max_indices] = 1
+        print(self.distances[:-4, :])
+            
         return self.distances, self.indexes
 
     def save_to_binary_file(self, output_file_path):

@@ -1,7 +1,5 @@
 import argparse
-import glob
 import os
-import re
 from datetime import datetime
 from pathlib import Path
 from time import time
@@ -12,29 +10,23 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import torch
-from pacmap import PaCMAP
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.decomposition import PCA
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import MinMaxScaler
-from torch import optim
 from torchvision.datasets import EMNIST, MNIST
-from trimap import TRIMAP
-from umap import UMAP
-
-from ivhd.ivdh import IVHD
-from knn_graph.faiss_generator import FaissGenerator
-from models.tsne import MY_TSNE
+from torch.optim import Adam, Adagrad
 
 
 def run(
-    dataset=Literal["mnist", "emnist", "rcv", "amazon"],
-    model=Literal["ivhd", "umap", "pacmap", "tsne", "trimap"],
+    dataset:Literal["mnist", "emnist", "rcv", "amazon"],
+    model:Literal["ivhd", "umap", "pacmap", "tsne", "trimap"],
     interactive=False,
-    device="auto",
+    device : Literal['cuda', 'cpu', 'auto', 'mps']="auto",
     graph_file="",
     save_output=False,
 ):
+    assert device in {"cpu", "cuda", "mps", "auto"}, f"Invalid device: {device}. Allowed values are 'cpu', 'cuda', 'mps' or 'auto'."
     if device == "auto":
         device = (
             torch.device("cuda")
@@ -51,6 +43,8 @@ def run(
             N = X.shape[0]
             X = X.reshape(N, -1) / 255.0
             Y = data.targets[:N]
+            pca = PCA(n_components=50)
+            X = torch.Tensor(pca.fit_transform(X))
         case "emnist":
             data = EMNIST("emnist", split="balanced", train=True, download=True)
             X = data.data
@@ -87,65 +81,60 @@ def run(
 
     match model:
         case "ivhd":
-            final_file = None
-            nn_param = 2
-            rm_param = 1
-            final_file = "./graph_files/graph.bin"
-            # if not graph_file:
-            #     # we will search for possible files
-            #     directory = Path("./graph_files/").absolute()
-            #     results = glob.glob(f"{Path(directory)}/{dataset}*")
-            #     output_list = [
-            #         int(match.group(1))
-            #         for string in results
-            #         if (match := re.search(r"_(\d+)nn\.bin$", string))
-            #     ]
-            #     if output_list and max(output_list) >= nn_param:
-            #         final_file = results[
-            #             max(range(len(output_list)), key=output_list.__getitem__)
-            #         ]
-            #     else:
-            #         final_file = str(Path(directory, f"{dataset}_{nn_param}nn.bin"))
-            # else:
-            #     final_file = graph_file
-            # if not Path(final_file).is_file():
-            #     faiss_generator = FaissGenerator(
-            #         pd.DataFrame(X.numpy()), cosine_metric=False
-            #     )
-            #     faiss_generator.run(nn=nn_param)
-            #     faiss_generator.save_to_binary_file(final_file)
-            model = IVHD(
+            from ivhd.ivdh import IVHD
+            model_dr = IVHD(
                 2,
-                nn=nn_param,
-                rn=rm_param,
+                nn=2,
+                rn=1,
                 c=0.05,
                 eta=0.02,
                 optimizer=None,
+                # optimizer=Adam,
                 optimizer_kwargs={"lr": 0.1},
-                epochs=3_000,
+                epochs=8_000,
                 device=device,
                 velocity_limit=False,
                 autoadapt=False,
-                graph_file=final_file,
+                graph_file="./graph_files/graph.bin"
             )
         case "pacmap":
-            model = PaCMAP(verbose=True)
+            if device == "cuda":
+                from parampacmap import ParamPaCMAP
+                model_dr = ParamPaCMAP(verbose=True)
+            else:
+                from pacmap import PaCMAP
+                model_dr = PaCMAP()
         case "tsne":
-            # model = TSNE(n_jobs=8, verbose=True)
-            model = MY_TSNE(n_jobs=8, verbose=True)
+            if device == "cuda":
+                from cuml import TSNE
+            else:
+                from openTSNE import TSNE
+            model_dr = TSNE(verbose=True)
+            X = X.numpy()
         case "umap":
-            model = UMAP(verbose=True)
+            if device == "cuda":
+                from cuml import UMAP
+            else:
+                from umap import UMAP
+            model_dr = UMAP(verbose=True)
+            X = X.numpy()
         case "trimap":
-            model = TRIMAP(verbose=True)
+            if device == "cuda":
+                from models.trimap import TRIMAP
+            else:
+                from trimap import TRIMAP
+                X = X.numpy()
+            model_dr = TRIMAP(verbose=True)
         case _:
             raise ValueError("Only support ivhd, pacmap, tsne, umap")
 
     # maybe we should use default timer or sth like that to be more accurate
     start = time()
-    x = model.fit_transform(X)
+    x = model_dr.fit_transform(X)
     end = time()
+    print(end - start)
 
-    save_dir = f'./experiments/{dataset}_{datetime.now().strftime("%Y-%m-%d_%H:%M:%S")}'
+    save_dir = f'./experiments/{datetime.now().strftime("%Y-%m-%d_%H:%M:%S")}_{model}_{dataset}_{device}'
     os.makedirs(exist_ok=True, name=save_dir)
 
     if save_output:
@@ -211,6 +200,8 @@ if __name__ == "__main__":
 
     parser.add_argument("--save-output", action="store_true", dest="save_output")
 
+    parser.add_argument("--device", choices=["cpu", "cuda", "auto"], default="auto", dest='device', help="Device to use: 'cpu', 'cuda', 'mps' or 'auto'.")
+
     args = parser.parse_args()
 
     run(
@@ -219,4 +210,5 @@ if __name__ == "__main__":
         interactive=args.interactive,
         graph_file=args.graph,
         save_output=args.save_output,
+        device=args.device
     )
